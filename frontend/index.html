@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faircorp UI</title>
+  <link rel="icon" type="image/png" href="assets/icon.png" />
+
+  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+</head>
+<body>
+  <h1>Faircorp User Interface</h1>
+  <div id="app">
+    <button v-on:click="updateAll(); displayRooms(); displayWindows(); displayHeaters();">Refresh all</button>
+    <div style="color:#FF0000" v-if="mainError">
+      {{mainError}}
+    </div>
+    <h3>Building</h3>
+    <select v-model="selectedBuilding" v-on:change="displayRooms(); selectedRoom=null; displayHeaters(); displayWindows()">
+      <option value=null>Select building</option>
+      <option v-for="building in buildings" :value="building">{{building.name}}</option>
+    </select>
+    <button v-if="selectedBuilding" v-on:click="deleteBuilding(selectedBuilding.id); updateBuildings();" style="color:#FF0000">Delete Building</button>
+    <div style="color:#FF0000" v-if="buildingDeleteError">
+      {{buildingDeleteError}}
+    </div>
+    <p>Create new building</p>
+    <input v-model="buildingNameInput" placeholder="Enter building name">
+    <button v-on:click="createBuilding(buildingNameInput); updateBuildings(); buildingNameInput=''">Create Building</button>
+    <div style="color:#FF0000" v-if="buildingError">
+      {{buildingError}}
+    </div>
+    <div v-if="selectedBuilding">
+      <h3>Room</h3>
+      <select v-model="selectedRoom" v-on:change="displayHeaters(); displayWindows()">
+        <option value=null>Select room</option>
+        <option v-for="room in displayedRooms" :value="room">{{room.name}}</option>
+      </select>
+      <button v-if="selectedRoom" v-on:click="switchAllWindows(selectedRoom.id); updateWindows(); displayWindows()">Switch All Windows</button>
+      <button v-if="selectedRoom" v-on:click="switchAllHeaters(selectedRoom.id); updateHeaters(); displayHeaters();">Switch All Heaters</button>
+      <button v-if="selectedRoom" v-on:click="deleteRoom(selectedRoom.id); updateRooms(); displayRooms();" style="color:#FF0000">Delete Room</button>
+      <div style="color:#FF0000" v-if="roomDeleteError">
+        {{roomDeleteError}}
+      </div>
+      <p></p>
+      <div v-if="selectedRoom">
+        <p>Floor: {{  selectedRoom.floor  }}</p>
+        <p>Temperature: {{  selectedRoom.current_temperature  }}°C (target={{  selectedRoom.target_temperature  }}°C)</p>
+      </div>
+      <p>Create new room</p>
+      <input v-model="roomNameInput" placeholder="Enter room name">
+      <p></p>
+      <select v-if="roomNameInput" v-model="roomBuildingIdInput">
+        <option value="">Select building</option>
+        <option v-for="building in buildings" :value="building.id">{{building.name}}</option>
+      </select>
+      <p></p>
+      <input v-if="roomBuildingIdInput&&roomNameInput" v-model="roomFloorInput" placeholder="Enter floor">
+      <p></p>
+      <input v-if="roomFloorInput&&roomBuildingIdInput&&roomNameInput" v-model="roomTargetTemperatureInput" placeholder="Target temperature (optional)" size="30">
+      <p></p>
+      <button v-if="roomFloorInput&&roomBuildingIdInput&&roomNameInput" v-on:click="createRoom(roomNameInput, roomBuildingIdInput, roomFloorInput, roomTargetTemperatureInput); updateRooms(); roomFloorInput=roomBuildingIdInput=roomNameInput=roomTargetTemperatureInput=''; displayRooms();">Create Room</button>
+      <div style="color:#FF0000" v-if="roomError">
+        {{roomError}}
+      </div>
+      <div v-if="selectedRoom">
+        <h3>Windows</h3>
+        <div style="color:#FF0000" v-if="windowDeleteError">
+          {{windowDeleteError}}
+        </div>
+        <ul>
+          <li v-for="window in displayedWindows">{{  window.name  }}
+            <p>ID: {{ window.id }} | Status: {{ window.windowStatus }}</p>
+            <button v-on:click="switchWindow(window.id); updateWindows()">Switch window</button>
+            <button v-on:click="deleteWindow(window.id); updateWindows(); displayWindows();" style="color:#FF0000">Delete Window</button>
+            <p></p>
+          </li>
+          <p>Create new window</p>
+          <input v-model="windowNameInput" placeholder="Enter window name">
+          <p></p>
+          <select v-if="windowNameInput" v-model="windowRoomIdInput">
+            <option value="">Select room</option>
+            <option v-for="room in displayedRooms" :value="room.id">{{room.name}}</option>
+          </select>
+          <p></p>
+          <select v-if="windowRoomIdInput&&windowNameInput" v-model="windowStatusInput">
+            <option value="">Select status</option>
+            <option v-for="status in windowStatus" :value="status">{{status}}</option>
+          </select>
+          <p></p>
+          <button v-if="windowStatusInput&&windowRoomIdInput&&windowNameInput" v-on:click="createWindow(windowNameInput, windowRoomIdInput, windowStatusInput); updateWindows(); windowStatusInput=windowRoomIdInput=windowNameInput=''; displayWindows();">Create Window</button>
+          <div style="color:#FF0000" v-if="windowError">
+            {{windowError}}
+          </div>
+        </ul>
+        <h3>Heaters</h3>
+        <div style="color:#FF0000" v-if="heaterDeleteError">
+          {{heaterDeleteError}}
+        </div>
+        <ul>
+          <li v-for="heater in displayedHeaters">{{  heater.name  }} ({{heater.power}}W)
+            <p>ID: {{ heater.id }} | Status: {{ heater.heaterStatus }}</p>
+            <button v-on:click="deleteHeater(heater.id); updateHeaters(); displayHeaters();" style="color:#FF0000">Delete Heater</button>
+            <p></p>
+          </li>
+          <p>Create new heater</p>
+          <input v-model="heaterNameInput" placeholder="Enter heater name">
+          <p></p>
+          <select v-if="heaterNameInput" v-model="heaterRoomIdInput">
+            <option value="">Select room</option>
+            <option v-for="room in displayedRooms" :value="room.id">{{room.name}}</option>
+          </select>
+          <p></p>
+          <select v-if="heaterRoomIdInput&&heaterNameInput" v-model="heaterStatusInput">
+            <option value="">Select status</option>
+            <option v-for="status in heaterStatus" :value="status">{{status}}</option>
+          </select>
+          <p></p>
+          <input v-if="heaterStatusInput&&heaterRoomIdInput&&heaterNameInput" v-model="heaterPowerInput" placeholder="Enter heater power (optional)" size="30">
+          <p></p>
+          <button v-if="heaterStatusInput&&heaterRoomIdInput&&heaterNameInput" v-on:click="createHeater(heaterNameInput, heaterRoomIdInput, heaterStatusInput, heaterPowerInput); updateHeaters(); heaterStatusInput=heaterRoomIdInput=heaterNameInput=heaterPowerInput=''; displayHeaters();">Create Heater</button>
+          <div style="color:#FF0000" v-if="heaterError">
+            {{heaterError}}
+          </div>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var app = new Vue({
+      el: "#app",
+      data:{
+        buildingNameInput: "",
+        buildingError: "",
+        buildingDeleteError: "",
+        selectedBuilding: null,
+        buildings: [],
+        roomNameInput: "",
+        roomBuildingIdInput: "",
+        roomFloorInput: "",
+        roomTargetTemperatureInput: "",
+        roomError: "",
+        roomDeleteError: "",
+        selectedRoom: null,
+        rooms: [],
+        displayedRooms: [],
+        windowNameInput: "",
+        windowRoomIdInput: "",
+        windowStatusInput: "",
+        windowError: "",
+        windowDeleteError: "",
+        windows: [],
+        displayedWindows: [],
+        windowStatus: ["OPEN", "CLOSED"],
+        heaterNameInput: "",
+        heaterRoomIdInput: "",
+        heaterStatusInput: "",
+        heaterPowerInput: "",
+        heaterError: "",
+        heaterDeleteError: "",
+        heaters: [],
+        displayedHeaters: [],
+        heaterStatus: ["OFF", "ON"],
+        mainError: ""
+      },
+      methods:{
+        updateBuildings(){
+          axios.get("http://localhost:8080/api/buildings").then(response => this.buildings = response.data).catch(error => this.mainError = "Buildings loading error");
+        },
+        createBuilding(newName){
+          if(newName==""){
+            this.buildingError = "Building name is empty!";
+            throw new Error("Building name is empty!");
+          }
+          this.buildingError = "";
+          axios.post("http://localhost:8080/api/buildings", {
+           name: newName
+          }).catch(error => this.buildingError = "Building creation error");
+        },
+        deleteBuilding(id){
+          axios.delete("http://localhost:8080/api/buildings/" + id).catch(error => this.buildingDeleteError = "Building deleting error");
+        },
+        updateRooms(){
+          axios.get("http://localhost:8080/api/rooms").then(response => this.rooms = response.data).catch(error => this.mainError = "Rooms loading error");
+        },
+        createRoom(newName, newBuildingId, newFloor, newTargetTemperature=null){
+          axios.post("http://localhost:8080/api/rooms", {
+           name: newName,
+           buildingId: newBuildingId,
+           floor: newFloor,
+           current_temperature: null,
+           target_temperature: newTargetTemperature
+          }).catch(error => this.roomError = "Room creation error");
+        },
+        deleteRoom(id){
+          axios.delete("http://localhost:8080/api/rooms/" + id).catch(error => this.roomDeleteError = "Room deleting error");
+        },
+        displayRooms(){
+          this.displayedRooms = this.rooms.filter(room => room.buildingId==this.selectedBuilding.id);
+        },
+        switchAllWindows(roomId){
+          axios.put("http://localhost:8080/api/rooms/"+roomId+"/switchWindows").catch(error => this.roomError="Windows switching error");
+        },
+        switchAllHeaters(roomId){
+          axios.put("http://localhost:8080/api/rooms/"+roomId+"/switchHeaters").catch(error => this.roomError="Heaters switching error");
+        },
+        updateWindows(){
+          axios.get("http://localhost:8080/api/windows").then(response => this.windows = response.data).catch(error => this.mainError = "Windows loading error");
+        },
+        createWindow(newName, newRoomId, newWindowStatus){
+          axios.post("http://localhost:8080/api/windows", {
+           name: newName,
+           roomId: newRoomId,
+           windowStatus: newWindowStatus
+          }).catch(error => this.windowError = "Window creation error");
+        },
+        displayWindows(){
+          this.displayedWindows = this.windows.filter(window => window.roomId==this.selectedRoom.id);
+        },
+        switchWindow(id){
+          axios.put("http://localhost:8080/api/windows/" + id + "/switch").catch(error => this.windowError = "Window switching error");
+          displayWindows=[];
+          this.displayWindows();
+        },
+        deleteWindow(id){
+          axios.delete("http://localhost:8080/api/windows/" + id).catch(error => this.windowDeleteError = "Window deleting error");
+        },
+        updateHeaters(){
+          axios.get("http://localhost:8080/api/heaters").then(response => this.heaters = response.data).catch(error => this.mainError = "Heaters loading error");
+        },
+        createHeater(newName, newRoomId, newHeaterStatus, newPower){
+          axios.post("http://localhost:8080/api/heaters", {
+           name: newName,
+           roomId: newRoomId,
+           heaterStatus: newHeaterStatus,
+           power: newPower
+          }).catch(error => this.heaterError = "Heater creation error");
+        },
+        displayHeaters(){
+          this.displayedHeaters = this.heaters.filter(heater => heater.roomId==this.selectedRoom.id);
+        },
+        deleteHeater(id){
+          axios.delete("http://localhost:8080/api/heaters/" + id).catch(error => this.heaterDeleteError = "Heater deleting error");
+        },
+        updateAll(){
+          this.updateBuildings();
+          this.updateRooms();
+          this.updateWindows();
+          this.updateHeaters();
+        }
+      },
+      beforeMount(){
+        this.updateAll();
+      }
+    });
+  </script>
+
+</body>
+
+<div class="footer">
+  <p>Nathan Guillemin - Majeure Info - Web&Mobile programming - Front end</p>
+</div>
+
+</html>
